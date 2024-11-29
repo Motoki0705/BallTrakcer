@@ -32,8 +32,9 @@ class VideoFramePatcher(nn.Module):
         return patches
     
 if __name__ == '__main__':
-    # Example usage
-    frame = torch.randn(4, 3, 1920, 1128)  # A random batch of frames with shape (batch_size, 3, 1920, 1128)
     patcher = VideoFramePatcher(patch_size=(128, 128))
-    patches = patcher(frame)  # Output shape will be (batch_size, 15, 9, 3, 128, 128)
-    print(patches.shape)
+    # Example usage
+    for i in range(25):
+        frame = torch.randn(1, 3, 1920, 1128)  # A random batch of frames with shape (batch_size, 3, 1920, 1128)
+        patches = patcher(frame)  # Output shape will be (batch_size, 15, 9, 3, 128, 128)
+        print(patches.shape)

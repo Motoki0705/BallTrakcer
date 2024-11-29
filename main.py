@@ -83,7 +83,7 @@ class BallDetectionModel(nn.Module):
         return prediction
 
 
-def simulate_frame_processing(batch_size=4, seq_len=20, num_frames=25, frame_size=(1920, 1080)):
+def simulate_frame_processing(batch_size=1, seq_len=20, num_frames=25, frame_size=(1920, 1080)):
     """
     仮のランダムなフレームデータを生成し、モデルに入力して動作を確認する。
     """
@@ -95,9 +95,9 @@ def simulate_frame_processing(batch_size=4, seq_len=20, num_frames=25, frame_siz
     for frame_idx in range(num_frames):
         # ランダムな1フレーム分のデータを生成
         frames = torch.randn(batch_size, 1, 3, *frame_size)
-
-        # モデルにフレームを入力
-        prediction = model(frames)
+        with torch.no_grad():
+            # モデルにフレームを入力
+            prediction = model(frames)
 
         # 結果を出力
         if prediction is not None:

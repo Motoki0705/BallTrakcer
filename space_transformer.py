@@ -105,8 +105,10 @@ class Encoder(nn.Module):
         return x[:, -1, :]  # Return only the last element of the sequence
 
 if __name__ == '__main__':
-    # Example usage
-    feature_vectors = torch.randn(1, 15, 9, 512)  # Example feature vectors with shape (batch_size, height, width, d_model)
     encoder = Encoder(d_model=512, num_heads=8, d_ff=2048, num_layers=6, height=15, width=9, dropout=0.1)
-    encoded_output = encoder(feature_vectors)  # Output shape will be (batch_size, d_model)
-    print(encoded_output.shape)
+    for i in range(25):    
+        # Example usage
+        feature_vectors = torch.randn(1, 15, 9, 512)  # Example feature vectors with shape (batch_size, height, width, d_model)
+    
+        encoded_output = encoder(feature_vectors)  # Output shape will be (batch_size, d_model)
+        print(encoded_output.shape)
