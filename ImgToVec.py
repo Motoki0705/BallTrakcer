@@ -11,6 +11,11 @@ class ImgToVec(nn.Module):
         self.mobilenet.classifier = nn.Identity()
 
     def forward(self, patches: torch.Tensor):
+        # GPUが利用可能な場合はパッチとモデルをGPUに移動
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        patches = patches.to(device)
+        self.mobilenet = self.mobilenet.to(device)
+
         # patchesの形状は (batch_size, num_patches_h, num_patches_w, 3, 128, 128)
         batch_size, num_patches_h, num_patches_w, _, patch_h, patch_w = patches.shape
 
@@ -27,8 +32,12 @@ class ImgToVec(nn.Module):
 
 if __name__ == '__main__':
     img_to_vec = ImgToVec()
+    # GPUが利用可能な場合はモデルをGPUに移動
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    img_to_vec = img_to_vec.to(device)
+
     # テスト用の例
     for i in range(25):
-        patches = torch.randn(1, 15, 9, 3, 128, 128)  # (batch_size, num_patches_h, num_patches_w, 3, 128, 128)
+        patches = torch.randn(1, 15, 9, 3, 128, 128).to(device)  # (batch_size, num_patches_h, num_patches_w, 3, 128, 128)
         patches_features = img_to_vec(patches)  # 出力の形状は (batch_size, num_patches_h, num_patches_w, feature_dim)
         print(patches_features.shape)
