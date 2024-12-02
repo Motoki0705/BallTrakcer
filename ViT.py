@@ -67,13 +67,13 @@ class MultiHeadAttention(nn.Module):
 
 class FeedForward(nn.Module):
     """位置ごとの前向きフィードフォワード層"""
-    def __init__(self, embed_dim: int, hidden_dim: int, dropout: float = 0.1):
+    def __init__(self, embed_dim: int, dropout: float = 0.1):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(embed_dim, hidden_dim),
+            nn.Linear(embed_dim, embed_dim*4),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, embed_dim),
+            nn.Linear(embed_dim*4, embed_dim),
             nn.Dropout(dropout)
         )
 
@@ -82,10 +82,10 @@ class FeedForward(nn.Module):
 
 class EncoderBlock(nn.Module):
     """Transformerエンコーダブロック"""
-    def __init__(self, embed_dim: int, num_heads: int, hidden_dim: int, dropout: float = 0.1):
+    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1):
         super().__init__()
         self.attention = MultiHeadAttention(embed_dim, num_heads, dropout)
-        self.ff = FeedForward(embed_dim, hidden_dim, dropout)
+        self.ff = FeedForward(embed_dim, dropout)
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
 
@@ -97,7 +97,7 @@ class EncoderBlock(nn.Module):
 class VisionTransformer(nn.Module):
     """Vision Transformer"""
     def __init__(self, img_h: int, img_w: int, patch_size: int, in_channels: int, embed_dim: int, 
-                 num_heads: int, num_layers: int, num_classes: int, hidden_dim: int, dropout: float = 0.1):
+                 num_heads: int, num_layers: int, num_classes: int, dropout: float = 0.1):
         super().__init__()
         self.patch_embedding = PatchEmbedding(patch_size, in_channels, embed_dim)
         
@@ -108,7 +108,7 @@ class VisionTransformer(nn.Module):
         self.add_cls_token = AddCLSToken(embed_dim)
         self.add_positional_embedding = AddPositionalEmbedding(num_patches, embed_dim)
         self.encoder = nn.Sequential(
-            *[EncoderBlock(embed_dim, num_heads, hidden_dim, dropout) for _ in range(num_layers)]
+            *[EncoderBlock(embed_dim, num_heads, dropout) for _ in range(num_layers)]
         )
         self.mlp_head = nn.Sequential(
             nn.LayerNorm(embed_dim),
@@ -130,6 +130,7 @@ if __name__ == '__main__':
     import torch.optim as optim
     import torch.nn as nn
 
+    from tqdm import tqdm
     # データセットの前処理
     transform = transforms.Compose([
         transforms.Resize((224, 224)),  # ViTに適したサイズにリサイズ
@@ -141,29 +142,28 @@ if __name__ == '__main__':
     train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
     test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
     # モデルのインスタンス化
     vit_model = VisionTransformer(
         img_h=224,
         img_w=224,
-        patch_size=16,
+        patch_size=32,
         in_channels=3,
-        embed_dim=768,
+        embed_dim=512,
         num_heads=8,
-        num_layers=12,
+        num_layers=6,
         num_classes=10,  # CIFAR-10は10クラス
-        hidden_dim=3072,
         dropout=0.1
     )
 
     # 損失関数とオプティマイザ
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(vit_model.parameters(), lr=0.001)
-
     # 学習ループ
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f'device is {device}')
     vit_model.to(device)
 
     num_epochs = 10
@@ -171,8 +171,11 @@ if __name__ == '__main__':
     for epoch in range(num_epochs):
         vit_model.train()
         running_loss = 0.0
-
-        for inputs, labels in train_loader:
+        correct = 0
+        total = 0
+        epoch_iterator = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", leave=True)
+        
+        for inputs, labels in epoch_iterator:
             inputs, labels = inputs.to(device), labels.to(device)
             
             optimizer.zero_grad()
@@ -182,20 +185,29 @@ if __name__ == '__main__':
             optimizer.step()
             
             running_loss += loss.item()
-        
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {running_loss / len(train_loader)}")
+            
+            # バッチごとの正答率計算
+            _, predicted = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            accuracy = 100 * correct / total
 
+            epoch_iterator.set_postfix({"Loss": running_loss / (len(epoch_iterator) + 1), "Accuracy": f"{accuracy:.2f}%"})
+        
+        print(f"Epoch {epoch+1}/{num_epochs} completed, Average Loss: {running_loss / len(train_loader):.4f}, Accuracy: {accuracy:.2f}%")
     # テストデータで評価
     vit_model.eval()
     correct = 0
     total = 0
 
     with torch.no_grad():
-        for inputs, labels in test_loader:
+        test_iterator = tqdm(test_loader, desc="Testing", leave=True)
+        for inputs, labels in test_iterator:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = vit_model(inputs)
             _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    print(f"Accuracy: {100 * correct / total:.2f}%")
+    accuracy = 100 * correct / total
+    print(f"Accuracy: {accuracy:.2f}%")
